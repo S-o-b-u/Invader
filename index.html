@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invader - Focus Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Retro Terminal -->
+    <!-- Application Structure Plan: The SPA is structured as an interactive project showcase for "Invader". It follows a narrative flow: 1) Hero hook, 2) Problem/Solution with features, 3) An interactive diagram explaining the "How It Works" pipeline, 4) A "Future Roadmap" section featuring a dynamic Chart.js mock-up of the analytics feature, and 5) A "Get Started" call-to-action. This structure was chosen to guide the user through a journey of discovery, making the project's purpose and technology more engaging and understandable than a static document. -->
+    <!-- Visualization & Content Choices: Hero: Large text for impact. Features: Icon-based list for scannability. How It Works: A multi-step interactive diagram (HTML/CSS/JS) with a slider to simulate head movement and demonstrate the core logic, chosen for its high engagement and educational value. Future Roadmap: Interactive cards and a dynamic Chart.js line chart to visualize the potential 'Focus Analytics' feature. This provides a tangible glimpse into the project's future. Getting Started: Code blocks with copy functionality for user convenience. No SVG/Mermaid used; all visuals are HTML/CSS or Canvas (Chart.js). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Space Mono', monospace;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+        }
+        .font-display {
+            font-family: 'VT323', monospace;
+        }
+        .glass-effect {
+            background: rgba(26, 26, 46, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(127, 90, 240, 0.3);
+        }
+        .text-glow {
+            text-shadow: 0 0 8px rgba(127, 90, 240, 0.8);
+        }
+        .btn-primary {
+            background-color: #7f5af0;
+            color: #fffffe;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #9d7ff3;
+            box-shadow: 0 0 15px rgba(127, 90, 240, 0.7);
+        }
+        .feature-card:hover .feature-icon {
+            transform: scale(1.2);
+            color: #7f5af0;
+        }
+        .step-indicator {
+            transition: all 0.3s ease;
+        }
+        .step-indicator.active {
+            background-color: #7f5af0;
+            color: #fffffe;
+        }
+        .code-block {
+            background-color: #0e0e1a;
+            border-left: 4px solid #7f5af0;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .roadmap-card.completed {
+            opacity: 0.6;
+            border-left-color: #2cb67d;
+        }
+        .roadmap-card {
+             border-left: 4px solid #f25f4c;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            background: #7f5af0;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid #fffffe;
+        }
+
+        input[type=range]::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            background: #7f5af0;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid #fffffe;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="min-h-screen flex items-center justify-center text-center p-4">
+        <div class="space-y-6">
+            <h1 class="text-7xl md:text-9xl font-display text-glow">Invader 👾</h1>
+            <p class="text-xl md:text-2xl text-gray-300 max-w-2xl mx-auto">
+                Invade your distractions. Reclaim your focus.
+            </p>
+            <p class="text-lg text-gray-400 max-w-3xl mx-auto">
+                A smart Pomodoro timer that uses your webcam to pause when you look away, creating an accountability loop to keep you in the zone.
+            </p>
+            <div>
+                <a href="#getting-started" class="btn-primary font-bold py-3 px-8 rounded-lg text-lg inline-block">Get Started</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 space-y-24 md:space-y-32 mb-24 md:mb-32">
+
+        <section id="features">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl md:text-5xl font-display text-glow">Core Features</h2>
+                <p class="mt-4 text-lg text-gray-400">Everything you need for deep, uninterrupted work sessions.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div class="feature-card glass-effect p-6 rounded-lg text-center space-y-4">
+                    <div class="feature-icon text-5xl inline-block transition-transform duration-300">🧠</div>
+                    <h3 class="text-xl font-bold">Smart Attention Tracking</h3>
+                    <p class="text-gray-400">Webcam and MediaPipe detect your head pose. Look away, timer pauses. Look back, it resumes.</p>
+                </div>
+                <div class="feature-card glass-effect p-6 rounded-lg text-center space-y-4">
+                    <div class="feature-icon text-5xl inline-block transition-transform duration-300">🍅</div>
+                    <h3 class="text-xl font-bold">Automatic Pomodoro Cycles</h3>
+                    <p class="text-gray-400">Runs on the classic 25 min work / 5 min break technique to prevent burnout.</p>
+                </div>
+                <div class="feature-card glass-effect p-6 rounded-lg text-center space-y-4">
+                    <div class="feature-icon text-5xl inline-block transition-transform duration-300">🖥️</div>
+                    <h3 class="text-xl font-bold">Real-time Visual Feedback</h3>
+                    <p class="text-gray-400">All info is overlaid directly onto your webcam feed. No need to switch windows.</p>
+                </div>
+                <div class="feature-card glass-effect p-6 rounded-lg text-center space-y-4">
+                    <div class="feature-icon text-5xl inline-block transition-transform duration-300">⌨️</div>
+                    <h3 class="text-xl font-bold">Simple Controls</h3>
+                    <p class="text-gray-400">Use the spacebar to manually pause/resume or 'q' to quit the application.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="how-it-works">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl md:text-5xl font-display text-glow">How It Works</h2>
+                <p class="mt-4 text-lg text-gray-400">An interactive look into the computer vision pipeline.</p>
+            </div>
+            <div class="glass-effect p-6 md:p-8 rounded-lg">
+                <div class="lg:grid lg:grid-cols-2 lg:gap-8 items-center">
+                    <div class="relative h-80 md:h-96 bg-black rounded-md flex items-center justify-center border-2 border-gray-700 overflow-hidden">
+                        <div id="visual-output" class="text-center p-4">
+                           <div class="text-6xl mb-4">📷</div>
+                           <h3 class="text-2xl font-bold">Step 1: Webcam Capture</h3>
+                           <p class="text-gray-400 mt-2">Invader captures a live feed from your camera using OpenCV.</p>
+                        </div>
+                    </div>
+                    <div class="mt-8 lg:mt-0">
+                        <h3 class="text-2xl font-bold mb-4">Interactive Simulation</h3>
+                        <p class="text-gray-400 mb-6">Use the slider to simulate turning your head. See how Invader analyzes your orientation to determine if you're focused.</p>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label for="head-pose-slider" class="block mb-2 font-bold">Simulate Head Yaw (Left/Right)</label>
+                                <input id="head-pose-slider" type="range" min="-45" max="45" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 text-center">
+                                <div class="bg-black/30 p-4 rounded-md">
+                                    <p class="text-sm text-gray-400">Yaw Angle</p>
+                                    <p id="yaw-value" class="text-2xl font-bold">0°</p>
+                                </div>
+                                <div class="bg-black/30 p-4 rounded-md">
+                                    <p class="text-sm text-gray-400">Pitch Angle</p>
+                                    <p id="pitch-value" class="text-2xl font-bold">0°</p>
+                                </div>
+                            </div>
+
+                            <div id="status-display" class="p-4 rounded-md text-center transition-colors duration-300 bg-green-500/20 border border-green-500">
+                                <p class="text-sm uppercase tracking-widest text-green-300">Status</p>
+                                <p id="focus-status" class="text-3xl font-bold text-white">FOCUSED</p>
+                            </div>
+                             <div id="timer-display" class="p-4 rounded-md text-center transition-colors duration-300 bg-purple-500/20 border border-purple-500">
+                                <p class="text-sm uppercase tracking-widest text-purple-300">Timer State</p>
+                                <p id="timer-state" class="text-3xl font-bold text-white">RUNNING</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="roadmap">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl md:text-5xl font-display text-glow">Future Roadmap</h2>
+                <p class="mt-4 text-lg text-gray-400">The journey for Invader has just begun. Here's what's next.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                <div class="roadmap-card completed glass-effect p-6 rounded-lg">
+                    <h3 class="text-xl font-bold text-green-300">✓ Python Foundation (Complete)</h3>
+                    <p class="text-gray-400 mt-2">The core application built with Python, OpenCV, and MediaPipe.</p>
+                </div>
+                 <div class="roadmap-card glass-effect p-6 rounded-lg">
+                    <h3 class="text-xl font-bold text-orange-300">Browser Extension Version</h3>
+                    <p class="text-gray-400 mt-2">Porting the logic to JavaScript to run directly in your browser for maximum accessibility.</p>
+                </div>
+                <div class="roadmap-card glass-effect p-6 rounded-lg">
+                    <h3 class="text-xl font-bold text-orange-300">Sound Alerts</h3>
+                    <p class="text-gray-400 mt-2">Optional audio cues for session changes and timer pauses.</p>
+                </div>
+                 <div class="roadmap-card glass-effect p-6 rounded-lg">
+                    <h3 class="text-xl font-bold text-orange-300">Customizable Timers</h3>
+                    <p class="text-gray-400 mt-2">Allow users to set their own custom work and break durations.</p>
+                </div>
+            </div>
+            
+            <div class="glass-effect p-6 md:p-8 rounded-lg">
+                 <h3 class="text-2xl font-bold text-center mb-2">Coming Soon: Focus Analytics</h3>
+                 <p class="text-center text-gray-400 mb-6">Track your productivity and see how your focus improves over time.</p>
+                 <div class="text-center mb-6 space-x-2">
+                     <button id="daily-btn" class="btn-primary py-2 px-4 rounded-md">Daily</button>
+                     <button id="weekly-btn" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-md transition-colors">Weekly</button>
+                 </div>
+                 <div class="chart-container">
+                    <canvas id="focusChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section id="getting-started">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl md:text-5xl font-display text-glow">Get Started</h2>
+                <p class="mt-4 text-lg text-gray-400">Ready to invade your distractions? Get the Python version running in minutes.</p>
+            </div>
+            <div class="max-w-4xl mx-auto space-y-8">
+                <div>
+                    <h3 class="text-xl font-bold mb-2">1. Clone the repository</h3>
+                    <div class="code-block p-4 rounded-lg relative">
+                        <pre><code class="language-bash">git clone https://github.com/YOUR_USERNAME/invader-focus-timer.git
+cd invader-focus-timer</code></pre>
+                        <button class="copy-btn absolute top-3 right-3 bg-gray-700 hover:bg-gray-600 text-xs py-1 px-2 rounded" data-clipboard-text="git clone https://github.com/YOUR_USERNAME/invader-focus-timer.git && cd invader-focus-timer">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold mb-2">2. Create a virtual environment & install packages</h3>
+                    <div class="code-block p-4 rounded-lg relative">
+                        <pre><code class="language-bash"># Create and activate venv, then...
+pip install -r requirements.txt</code></pre>
+                        <button class="copy-btn absolute top-3 right-3 bg-gray-700 hover:bg-gray-600 text-xs py-1 px-2 rounded" data-clipboard-text="pip install -r requirements.txt">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold mb-2">3. Run the application</h3>
+                    <div class="code-block p-4 rounded-lg relative">
+                        <pre><code class="language-bash">python invader.py</code></pre>
+                        <button class="copy-btn absolute top-3 right-3 bg-gray-700 hover:bg-gray-600 text-xs py-1 px-2 rounded" data-clipboard-text="python invader.py">Copy</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-gray-800 mt-24">
+        <div class="container mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center text-gray-500">
+            <p>&copy; 2025 Invader Project. Built for focus.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const FOCUSED_THRESHOLD = 15;
+            const slider = document.getElementById('head-pose-slider');
+            const yawValue = document.getElementById('yaw-value');
+            const pitchValue = document.getElementById('pitch-value');
+            const statusDisplay = document.getElementById('status-display');
+            const focusStatus = document.getElementById('focus-status');
+            const timerDisplay = document.getElementById('timer-display');
+            const timerState = document.getElementById('timer-state');
+            
+            let unfocusTimeout;
+
+            slider.addEventListener('input', () => {
+                const yaw = parseInt(slider.value);
+                yawValue.textContent = `${yaw}°`;
+
+                clearTimeout(unfocusTimeout);
+
+                if (Math.abs(yaw) > FOCUSED_THRESHOLD) {
+                    statusDisplay.className = "p-4 rounded-md text-center transition-colors duration-300 bg-red-500/20 border border-red-500";
+                    focusStatus.textContent = "UNFOCUSED";
+                    focusStatus.parentElement.querySelector('p').classList.remove('text-green-300');
+                    focusStatus.parentElement.querySelector('p').classList.add('text-red-300');
+
+                    unfocusTimeout = setTimeout(() => {
+                        timerDisplay.className = "p-4 rounded-md text-center transition-colors duration-300 bg-yellow-500/20 border border-yellow-500";
+                        timerState.textContent = "PAUSED";
+                        timerState.parentElement.querySelector('p').classList.remove('text-purple-300');
+                        timerState.parentElement.querySelector('p').classList.add('text-yellow-300');
+                    }, 2000);
+
+                } else {
+                    statusDisplay.className = "p-4 rounded-md text-center transition-colors duration-300 bg-green-500/20 border border-green-500";
+                    focusStatus.textContent = "FOCUSED";
+                    focusStatus.parentElement.querySelector('p').classList.remove('text-red-300');
+                    focusStatus.parentElement.querySelector('p').classList.add('text-green-300');
+                    
+                    timerDisplay.className = "p-4 rounded-md text-center transition-colors duration-300 bg-purple-500/20 border border-purple-500";
+                    timerState.textContent = "RUNNING";
+                    timerState.parentElement.querySelector('p').classList.remove('text-yellow-300');
+                    timerState.parentElement.querySelector('p').classList.add('text-purple-300');
+                }
+            });
+
+            const copyButtons = document.querySelectorAll('.copy-btn');
+            copyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const textToCopy = button.dataset.clipboardText;
+                    const tempInput = document.createElement('input');
+                    tempInput.value = textToCopy;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempInput);
+                    
+                    const originalText = button.textContent;
+                    button.textContent = 'Copied!';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                    }, 2000);
+                });
+            });
+
+            const dailyData = {
+                labels: ['9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm'],
+                datasets: [{
+                    label: 'Focus Cycles',
+                    data: [2, 3, 2, 1, 4, 3, 5, 2],
+                    borderColor: '#7f5af0',
+                    backgroundColor: 'rgba(127, 90, 240, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            };
+
+            const weeklyData = {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Focus Cycles',
+                    data: [15, 18, 22, 19, 25, 12, 8],
+                    borderColor: '#2cb67d',
+                    backgroundColor: 'rgba(44, 182, 125, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            };
+
+            const chartConfig = {
+                type: 'line',
+                data: dailyData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                             ticks: { color: '#e0e0e0' }
+                        },
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#e0e0e0' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                           labels: { color: '#e0e0e0' }
+                        }
+                    }
+                }
+            };
+
+            const ctx = document.getElementById('focusChart').getContext('2d');
+            const focusChart = new Chart(ctx, chartConfig);
+            
+            const dailyBtn = document.getElementById('daily-btn');
+            const weeklyBtn = document.getElementById('weekly-btn');
+            
+            dailyBtn.addEventListener('click', () => {
+                focusChart.data = dailyData;
+                focusChart.update();
+                dailyBtn.classList.add('btn-primary');
+                dailyBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+                weeklyBtn.classList.remove('btn-primary');
+                weeklyBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
+            });
+
+            weeklyBtn.addEventListener('click', () => {
+                focusChart.data = weeklyData;
+                focusChart.update();
+                weeklyBtn.classList.add('btn-primary');
+                weeklyBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+                dailyBtn.classList.remove('btn-primary');
+                dailyBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
+            });
+        });
+    </script>
+</body>
+</html>
