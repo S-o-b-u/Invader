@@ -17,170 +17,228 @@ class InvaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # Paths (must be set before using icon functions)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.png_icon_path = os.path.join(script_dir, "icon.png")
-        self.ico_icon_path = os.path.join(script_dir, "icon.ico")
+        import traceback
 
-        # Window title & size
-        self.title("INVADER")
-        self.geometry("500x700")
-
-        # Try to set icon (use .ico when available, else .png)
         try:
-            if os.path.exists(self.ico_icon_path):
-                self.iconbitmap(self.ico_icon_path)
-            elif os.path.exists(self.png_icon_path):
-                self.iconphoto(False, tk.PhotoImage(file=self.png_icon_path))
-        except Exception:
-            # fallback quietly if icon setting fails
-            pass
+            # Paths
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            self.png_icon_path = os.path.join(script_dir, "icon.png")
+            self.ico_icon_path = os.path.join(script_dir, "icon.ico")
 
-        self.toaster = ToastNotifier()
+            # Window
+            self.title("INVADER")
+            self.geometry("900x600")
 
-        # --- Tab System ---
-        self.tabs = ctk.CTkTabview(self, width=480, height=650)
-        self.tabs.pack(pady=10, padx=10, fill="both", expand=True)
+            # Try to set icon
+            try:
+                if os.path.exists(self.ico_icon_path):
+                    self.iconbitmap(self.ico_icon_path)
+                elif os.path.exists(self.png_icon_path):
+                    self.iconphoto(False, tk.PhotoImage(file=self.png_icon_path))
+            except Exception as e:
+                print("⚠️ Icon load failed:", e)
 
-        # Add tabs and get frame references
-        self.tabs.add("Pomodoro")
-        self.tabs.add("Dashboard")
-        self.pomodoro_tab = self.tabs.tab("Pomodoro")
-        self.dashboard_tab = self.tabs.tab("Dashboard")
+            # Toast notifier (Windows-only)
+            try:
+                from win10toast import ToastNotifier
+                self.toaster = ToastNotifier()
+            except Exception as e:
+                print("⚠️ ToastNotifier not available:", e)
+                self.toaster = None
 
-        # --- Pomodoro UI (placed inside Pomodoro tab) ---
-        self.video_label = ctk.CTkLabel(self.pomodoro_tab, text="Click 'Start' to begin.",
-                                        width=400, height=300,
-                                        corner_radius=10,
-                                        fg_color="black",
-                                        text_color="white")
-        self.video_label.pack(pady=10)
+            # --- Tab System ---
+            self.tabs = ctk.CTkTabview(self, width=480, height=650)
+            self.tabs.pack(pady=10, padx=10, fill="both", expand=True)
 
-        # Work input
-        work_frame = ctk.CTkFrame(self.pomodoro_tab)
-        work_frame.pack(pady=5)
-        ctk.CTkLabel(work_frame, text="Work Minutes:").pack(side="left", padx=5)
-        self.work_input = ctk.CTkEntry(work_frame, width=60)
-        self.work_input.insert(0, "1")
-        self.work_input.pack(side="left")
+            # Tabs
+            self.tabs.add("Pomodoro")
+            self.tabs.add("Dashboard")
+            self.pomodoro_tab = self.tabs.tab("Pomodoro")
+            self.dashboard_tab = self.tabs.tab("Dashboard")
 
-        # Break input
-        break_frame = ctk.CTkFrame(self.pomodoro_tab)
-        break_frame.pack(pady=5)
-        ctk.CTkLabel(break_frame, text="Break Minutes:").pack(side="left", padx=5)
-        self.break_input = ctk.CTkEntry(break_frame, width=60)
+            # Build UIs
+            self.create_pomodoro_tab()
+            self.create_dashboard_tab()
+
+            # --- Constants ---
+            self.YAW_THRESHOLD = 25
+            self.PITCH_THRESHOLD = 20
+            self.UNFOCUSED_TIME_LIMIT = 1
+
+            # --- MediaPipe ---
+            self.mp_face_mesh = mp.solutions.face_mesh
+            self.face_mesh = self.mp_face_mesh.FaceMesh(
+                max_num_faces=1,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            self.mp_drawing = mp.solutions.drawing_utils
+            self.drawing_spec = self.mp_drawing.DrawingSpec(
+                thickness=1, circle_radius=1, color=(0, 255, 0)
+            )
+
+            # --- State ---
+            self.session_state = "WORK"
+            self.is_paused = True
+            self.remaining_seconds = 0.0
+            self.unfocused_start_time = None
+            self.last_time = None
+
+            # Logging
+            self.logs = []
+            self.focused_count = 0
+            self.unfocused_count = 0
+
+            # Camera
+            self.cap = None
+            self.update_job = None
+
+            # --- System Tray ---
+            try:
+                from pystray import Icon, Menu, MenuItem as item
+                from PIL import Image as PILImage
+
+                if os.path.exists(self.png_icon_path):
+                    tray_icon_image = PILImage.open(self.png_icon_path)
+                elif os.path.exists(self.ico_icon_path):
+                    tray_icon_image = PILImage.open(self.ico_icon_path)
+                else:
+                    tray_icon_image = PILImage.new('RGBA', (64, 64), (0, 0, 0, 0))
+
+                self.tray_icon = Icon(
+                    "INVADER", tray_icon_image,
+                    menu=Menu(item("Show", self.show_window),
+                            item("Quit", self.quit_app))
+                )
+                threading.Thread(target=self.tray_icon.run, daemon=True).start()
+            except Exception as e:
+                print("⚠️ Tray icon failed:", e)
+                self.tray_icon = None
+
+        except Exception as e:
+            print("💥 Crash in InvaderApp init:", e)
+            traceback.print_exc()
+
+    # ----------------- UI Builders -----------------
+    def create_pomodoro_tab(self):
+        self.pomodoro_tab.grid_columnconfigure(0, weight=2)
+        self.pomodoro_tab.grid_columnconfigure(1, weight=1)
+        self.pomodoro_tab.grid_rowconfigure(0, weight=1)
+
+        # Left = Camera
+        self.camera_frame = ctk.CTkFrame(self.pomodoro_tab, corner_radius=10)
+        self.camera_frame.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
+
+        ctk.CTkLabel(
+            self.camera_frame, text="📷 Live Camera", font=("Arial", 16, "bold")
+        ).pack(pady=(8, 5))
+
+        self.camera_label = ctk.CTkLabel(self.camera_frame, text="Camera feed here")
+        self.camera_label.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Right = Controls
+        self.controls_frame = ctk.CTkFrame(self.pomodoro_tab, corner_radius=10)
+        self.controls_frame.grid(row=0, column=1, padx=8, pady=8, sticky="nsew")
+
+        # Inputs
+        ctk.CTkLabel(self.controls_frame, text="Work (minutes):").pack(pady=(10, 0))
+        self.work_input = ctk.CTkEntry(self.controls_frame)
+        self.work_input.insert(0, "25")
+        self.work_input.pack(pady=(0, 10), padx=20, fill="x")
+
+        ctk.CTkLabel(self.controls_frame, text="Break (minutes):").pack(pady=(10, 0))
+        self.break_input = ctk.CTkEntry(self.controls_frame)
         self.break_input.insert(0, "5")
-        self.break_input.pack(side="left")
+        self.break_input.pack(pady=(0, 10), padx=20, fill="x")
 
-        # Timer label
-        self.timer_label = ctk.CTkLabel(self.pomodoro_tab, text="--:--", font=("Arial", 48, "bold"))
-        self.timer_label.pack(pady=12)
+        # Progress bar
+        self.progress_bar = ctk.CTkProgressBar(self.controls_frame)
+        self.progress_bar.pack(pady=10, padx=20, fill="x")
+        self.progress_bar.set(0)
 
-        # Progress bar for timer
-        self.progress_bar = ctk.CTkProgressBar(self.pomodoro_tab, width=300)
-        self.progress_bar.set(0)  # start empty
-        self.progress_bar.pack(pady=10)
+        # Controls
+        ctk.CTkLabel(
+            self.controls_frame, text="⏱️ Pomodoro Controls", font=("Arial", 16, "bold")
+        ).pack(pady=(8, 5))
 
-        # Start button
-        self.start_button = ctk.CTkButton(self.pomodoro_tab, text="Start Pomodoro",
-                                          command=self.start_pomodoro)
-        self.start_button.pack(pady=6)
+        self.timer_label = ctk.CTkLabel(
+            self.controls_frame, text="25:00", font=("Arial", 32, "bold")
+        )
+        self.timer_label.pack(pady=(10, 20))
 
-        # Pause / Resume manual toggle (nice to have)
-        self.toggle_pause_btn = ctk.CTkButton(self.pomodoro_tab, text="Pause/Resume",
-                                              command=self.manual_toggle_pause)
-        self.toggle_pause_btn.pack(pady=4)
+        self.start_button = ctk.CTkButton(
+            self.controls_frame, text="▶️ Start", command=self.start_pomodoro
+        )
+        self.start_button.pack(pady=5, fill="x", padx=20)
 
-        # -------------------------------
-        # --- Dashboard UI (grid layout)
-        # -------------------------------
+        self.pause_button = ctk.CTkButton(
+            self.controls_frame, text="⏸️ Pause", command=self.manual_toggle_pause
+        )
+        self.pause_button.pack(pady=5, fill="x", padx=20)
 
-        # Configure grid for 2 columns
-        self.dashboard_tab.grid_columnconfigure(0, weight=2)  # Left (Logs, bigger)
-        self.dashboard_tab.grid_columnconfigure(1, weight=1)  # Right (Stats + History)
-        self.dashboard_tab.grid_rowconfigure((0, 1), weight=1)
+        self.reset_button = ctk.CTkButton(
+            self.controls_frame, text="🔄 Reset", command=self.stop_pomodoro
+        )
+        self.reset_button.pack(pady=5, fill="x", padx=20)
 
-        # ----- Logs (left side) -----
+        self.status_label = ctk.CTkLabel(self.controls_frame, text="Status: Idle")
+        self.status_label.pack(pady=(20, 10))
+
+    def create_dashboard_tab(self):
+        self.dashboard_tab.grid_columnconfigure(0, weight=2)
+        self.dashboard_tab.grid_columnconfigure(1, weight=1)
+        self.dashboard_tab.grid_rowconfigure(0, weight=1)
+
+        # Logs
         self.log_frame = ctk.CTkFrame(self.dashboard_tab, corner_radius=10)
-        self.log_frame.grid(row=0, column=0, rowspan=2, padx=10, pady=10, sticky="nsew")
+        self.log_frame.grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
 
-        ctk.CTkLabel(self.log_frame, text="Session Logs", font=("Arial", 16, "bold")).pack(pady=(8, 0))
-        self.log_text = ctk.CTkTextbox(self.log_frame, wrap="word", height=300, corner_radius=10)
-        self.log_text.pack(fill="both", expand=True, padx=10, pady=10)
+        ctk.CTkLabel(
+            self.log_frame, text="📜 Session Logs", font=("Arial", 16, "bold")
+        ).pack(pady=(10, 5))
+
+        self.log_scroll = ctk.CTkScrollableFrame(self.log_frame, width=480, height=360)
+        self.log_scroll.pack(fill="both", expand=True, padx=10, pady=5)
 
         self.summary_label = ctk.CTkLabel(self.log_frame, text="No stats yet.", anchor="w")
-        self.summary_label.pack(pady=(6, 10), padx=10, anchor="w")
+        self.summary_label.pack(pady=(6, 12), padx=10, anchor="w")
 
-        # ----- Focus Stats (top-right) -----
+        # Stats
         self.stats_frame = ctk.CTkFrame(self.dashboard_tab, corner_radius=10)
-        self.stats_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        self.stats_frame.grid(row=0, column=1, padx=12, pady=(12, 6), sticky="new")
 
-        ctk.CTkLabel(self.stats_frame, text="Focus Stats", font=("Arial", 16, "bold")).pack(pady=(8, 0))
+        ctk.CTkLabel(
+            self.stats_frame, text="📊 Focus Stats", font=("Arial", 16, "bold")
+        ).pack(pady=(8, 4))
 
-        self.focus_label = ctk.CTkLabel(self.stats_frame, text="Focused: 0 times")
+        self.focus_label = ctk.CTkLabel(self.stats_frame, text="✅ Focused: 0 times")
         self.focus_label.pack(anchor="w", padx=10, pady=(6, 0))
 
-        self.unfocus_label = ctk.CTkLabel(self.stats_frame, text="Unfocused: 0 times")
+        self.unfocus_label = ctk.CTkLabel(self.stats_frame, text="⚠️ Unfocused: 0 times")
         self.unfocus_label.pack(anchor="w", padx=10, pady=(2, 0))
 
-        self.focus_percent_label = ctk.CTkLabel(self.stats_frame, text="Focus %: 0%")
-        self.focus_percent_label.pack(anchor="w", padx=10, pady=(2, 8))
+        self.focus_percent_label = ctk.CTkLabel(self.stats_frame, text="📈 Focus %: 0%")
+        self.focus_percent_label.pack(anchor="w", padx=10, pady=(2, 10))
 
-        # ----- History (bottom-right) -----
+        # History (dark listbox replacement)
         self.history_frame = ctk.CTkFrame(self.dashboard_tab, corner_radius=10)
-        self.history_frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        self.history_frame.grid(row=1, column=1, padx=12, pady=(6, 12), sticky="nsew")
 
-        ctk.CTkLabel(self.history_frame, text="History", font=("Arial", 16, "bold")).pack(pady=(8, 0))
-        self.history_list = tk.Listbox(self.history_frame, height=6)
+        ctk.CTkLabel(
+            self.history_frame, text="📂 History", font=("Arial", 16, "bold")
+        ).pack(pady=(8, 4))
+
+        # Dark themed Listbox
+        self.history_list = tk.Listbox(
+            self.history_frame,
+            height=6,
+            bg="gray20", fg="white",    # Match dark mode
+            highlightthickness=0,
+            bd=0,
+            selectbackground="gray40",
+            selectforeground="white"
+        )
         self.history_list.pack(fill="both", expand=True, padx=10, pady=10)
-
-
-        # --- Constants ---
-        self.YAW_THRESHOLD = 25
-        self.PITCH_THRESHOLD = 20
-        self.UNFOCUSED_TIME_LIMIT = 1  # seconds
-
-        # --- MediaPipe ---
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(max_num_faces=1,
-                                                    min_detection_confidence=0.5,
-                                                    min_tracking_confidence=0.5)
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.drawing_spec = self.mp_drawing.DrawingSpec(
-            thickness=1, circle_radius=1, color=(0, 255, 0))
-
-        # --- Pomodoro State ---
-        self.session_state = "WORK"
-        self.is_paused = True
-        self.remaining_seconds = 0.0
-        self.unfocused_start_time = None
-        self.last_time = None
-
-        # Logging & stats
-        self.logs = []  # list of (timestamp_str, message)
-        self.focused_count = 0
-        self.unfocused_count = 0
-
-        # Camera
-        self.cap = None
-        self.update_job = None
-
-        # --- System Tray Icon (pystray) ---
-        try:
-            if os.path.exists(self.png_icon_path):
-                tray_icon_image = PILImage.open(self.png_icon_path)
-            elif os.path.exists(self.ico_icon_path):
-                tray_icon_image = PILImage.open(self.ico_icon_path)
-            else:
-                tray_icon_image = PILImage.new('RGBA', (64, 64), (0, 0, 0, 0))
-            self.tray_icon = Icon("INVADER", tray_icon_image,
-                                  menu=Menu(
-                                      item("Show", self.show_window),
-                                      item("Quit", self.quit_app)
-                                  ))
-            threading.Thread(target=self.tray_icon.run, daemon=True).start()
-        except Exception:
-            self.tray_icon = None  # continue gracefully if tray fails
 
     # ----------------- UI / App helpers -----------------
     def show_window(self):
@@ -213,10 +271,13 @@ class InvaderApp(ctk.CTk):
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{ts}] {message}"
         self.logs.append(line)
-        # append to text widget
-        self.log_text.insert("end", line + "\n")
-        self.log_text.see("end")
+
+        # Insert into scrollable frame (label per line)
+        log_label = ctk.CTkLabel(self.log_scroll, text=line, anchor="w")
+        log_label.pack(fill="x", padx=5, pady=2)
+
         self.update_summary()
+
 
     def update_summary(self):
         # A simple summary: number of log lines, last events
@@ -238,7 +299,7 @@ class InvaderApp(ctk.CTk):
 
             self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
             if not self.cap.isOpened():
-                self.video_label.configure(text="Error: Could not open camera.")
+                self.camera_label.configure(text="Error: Could not open camera.")
                 return
 
             self.session_state = "WORK"
@@ -262,7 +323,7 @@ class InvaderApp(ctk.CTk):
                 pass
             self.cap = None
         self.is_paused = True
-        self.video_label.configure(text="Click 'Start' to begin.", image=None)
+        self.camera_label.configure(text="Click 'Start' to begin.", image=None)
         self.timer_label.configure(text="--:--")
         self.start_button.configure(text="Start Pomodoro")
         self._log_event("Stopped Pomodoro")
@@ -424,8 +485,8 @@ class InvaderApp(ctk.CTk):
         # Convert to image and display in CTk label
         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         imgtk = ImageTk.PhotoImage(image=img.resize((400, 300)))
-        self.video_label.configure(image=imgtk, text="")
-        self.video_label.image = imgtk
+        self.camera_label.configure(image=imgtk, text="")
+        self.camera_label.image = imgtk
 
         # schedule next frame
         self.update_job = self.after(30, self.update_frame)
@@ -454,9 +515,13 @@ class InvaderApp(ctk.CTk):
 
 
 if __name__ == "__main__":
-    ctk.set_appearance_mode("dark")  # or "light"
+    print("Launching Invader...")
+    ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
 
     app = InvaderApp()
+    print("App created")
     app.protocol("WM_DELETE_WINDOW", app.withdraw_to_tray)
     app.mainloop()
+    print("Exited mainloop")
+
